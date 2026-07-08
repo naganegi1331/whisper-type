@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Whisper モデル（サイズが大きいためリポジトリに含めない）
+models/*.bin
+models/*.gguf
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# テスト
+.pytest_cache/
+.coverage
