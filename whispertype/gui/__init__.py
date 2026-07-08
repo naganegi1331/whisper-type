@@ -1,0 +1,1 @@
+"""WhisperType GUI（PySide6）。"""
