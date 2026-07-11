@@ -18,6 +18,9 @@ dependencies = [
     "pywhispercpp>=1.2",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
 [project.gui-scripts]
 whispertype = "whispertype.app:main"
 

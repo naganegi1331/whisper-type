@@ -148,3 +148,33 @@ def test_engine_error_reported():
     recognizer.stop()
     assert "モデルが壊れています" in str(errors[0])
     assert not recorder.recording
+
+
+def test_stop_timeout_keeps_worker_reference():
+    recorder = FakeRecorder()
+    entered = False
+    release = False
+
+    class SlowEngine:
+        def transcribe(self, audio):
+            nonlocal entered
+            entered = True
+            while not release:
+                time.sleep(0.01)
+            return "完了"
+
+    recognizer = StreamingRecognizer(
+        recorder=recorder,
+        engine=SlowEngine(),
+        on_partial=lambda t: None,
+        on_commit=lambda t: None,
+        interval_ms=200,
+    )
+    recorder.feed_seconds(2.0)
+    recognizer.start()
+    assert wait_until(lambda: entered)
+    assert recognizer.stop(timeout=0.01) is False
+    assert recognizer.is_running
+    release = True
+    assert recognizer.stop(timeout=1.0) is True
+    assert not recognizer.is_running

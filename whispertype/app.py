@@ -66,19 +66,21 @@ def main() -> int:
             "設定画面からホットキーを変更してください。",
         )
 
-    def rebind_hotkey() -> None:
+    def rebind_hotkey(hotkey: str) -> bool:
         nonlocal hotkey_manager
         try:
             if hotkey_manager is None:
-                hotkey_manager = HotkeyManager(config.hotkey, controller.toggle)
+                hotkey_manager = HotkeyManager(hotkey, controller.toggle)
             else:
-                hotkey_manager.rebind(config.hotkey)
+                hotkey_manager.rebind(hotkey)
+            return True
         except Exception as exc:
             QMessageBox.warning(
                 window,
                 __app_name__,
-                f"ホットキー「{config.hotkey}」を登録できませんでした:\n{exc}",
+                f"ホットキー「{hotkey}」を登録できませんでした:\n{exc}",
             )
+            return False
 
     window.on_hotkey_changed = rebind_hotkey
 

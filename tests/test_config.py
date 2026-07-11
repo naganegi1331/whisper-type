@@ -44,6 +44,22 @@ def test_load_ignores_unknown_keys(tmp_path):
     assert loaded.auto_input is True
 
 
+def test_load_rejects_invalid_types_and_ranges(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "auto_input": "yes",
+                "recognize_interval_ms": "fast",
+                "typing_interval_ms": -1,
+                "language": "unsupported",
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert AppConfig.load(path) == AppConfig()
+
+
 def test_saved_file_is_utf8_json(tmp_path):
     path = tmp_path / "config.json"
     AppConfig().save(path)

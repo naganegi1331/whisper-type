@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         self._config = config
         self._allow_close = False  # 閉じるボタンはトレイへの最小化にする
         # 設定でホットキーが変わったときに app 側が差し替えるコールバック
-        self.on_hotkey_changed = lambda: None
+        self.on_hotkey_changed = lambda hotkey: True
 
         self.setWindowTitle(__app_name__)
         self.setMinimumSize(420, 480)
@@ -127,14 +127,17 @@ class MainWindow(QMainWindow):
         from .settings_dialog import SettingsDialog
 
         dialog = SettingsDialog(self._config, parent=self)
+        previous_hotkey = self._config.hotkey
         if dialog.exec():
+            if dialog.hotkey_changed and not self.on_hotkey_changed(
+                self._config.hotkey
+            ):
+                self._config.hotkey = previous_hotkey
             self._config.save()
             self._controller.apply_config(reload_engine=dialog.model_settings_changed)
             self._hotkey_label.setText(self._format_hotkey(self._config.hotkey))
             self._model_label.setText(self._config.model_name)
             self._auto_input_check.setChecked(self._config.auto_input)
-            if dialog.hotkey_changed:
-                self.on_hotkey_changed()
 
     # -------------------------------------------------------------- 閉じる
 
