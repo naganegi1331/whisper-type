@@ -69,7 +69,7 @@ def test_missing_model_reports_error():
     controller = AppController(config=config, on_error=errors.append)
 
     controller.start_dictation()
-    assert controller.state == AppState.ERROR
+    assert wait_until(lambda: controller.state == AppState.ERROR)
     assert len(errors) == 1
     assert "model.bin" in errors[0]
 
@@ -79,3 +79,13 @@ def test_shutdown_while_recording():
     controller.start_dictation()
     controller.shutdown()
     assert errors == []
+
+
+def test_engine_reload_is_deferred_until_recording_finishes():
+    controller, states, errors = make_controller()
+    controller.start_dictation()
+    controller.apply_config(reload_engine=True)
+    assert controller._engine is not None
+    controller.stop_dictation()
+    assert wait_until(lambda: controller.state == AppState.WAITING)
+    assert controller._engine is None

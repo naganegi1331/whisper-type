@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 DEFAULT_HOTKEY = "ctrl+shift+space"
@@ -67,12 +67,17 @@ class AppConfig:
             return cls()
         if not isinstance(raw, dict):
             return cls()
-        known = {f.name: f.type for f in fields(cls)}
-        kwargs = {k: v for k, v in raw.items() if k in known}
-        try:
-            return cls(**kwargs)
-        except TypeError:
-            return cls()
+        defaults = cls()
+        kwargs = {}
+        for item in fields(cls):
+            if item.name not in raw:
+                continue
+            value = raw[item.name]
+            if _is_valid_value(item.name, value):
+                kwargs[item.name] = value
+            else:
+                kwargs[item.name] = getattr(defaults, item.name)
+        return cls(**kwargs)
 
     def save(self, path: Path | None = None) -> None:
         """設定ファイルへ保存する。"""
@@ -89,3 +94,24 @@ class AppConfig:
         if p.is_absolute():
             return p
         return Path(__file__).resolve().parent.parent / p
+
+
+def _is_valid_value(name: str, value: object) -> bool:
+    """永続化された設定値の型と安全な範囲を検証する。"""
+    if name in {"hotkey", "model_name", "model_path", "input_device"}:
+        return isinstance(value, str) and (bool(value.strip()) or name == "input_device")
+    if name == "language":
+        return value in {"auto", "ja", "en"}
+    if name in {"auto_input", "autostart", "start_minimized"}:
+        return type(value) is bool
+    if type(value) is not int:
+        return False
+    ranges = {
+        "n_threads": (0, 1024),
+        "recognize_interval_ms": (200, 60000),
+        "input_delay_ms": (0, 10000),
+        "typing_interval_ms": (0, 500),
+        "sample_rate": (8000, 192000),
+    }
+    low, high = ranges[name]
+    return low <= value <= high

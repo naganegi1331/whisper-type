@@ -46,6 +46,9 @@ class AppController:
         self._state = AppState.WAITING
         self._committed_text = ""  # 確定済み区間の累積（表示用）
         self._recognizer: StreamingRecognizer | None = None
+        self._engine_loading = False
+        self._pending_engine_reload = False
+        self._shutting_down = False
 
         self.typist = AutoTypist(
             enabled=config.auto_input,
@@ -102,31 +105,69 @@ class AppController:
     def start_dictation(self) -> None:
         """音声入力を開始する。"""
         with self._lock:
-            if self._recognizer is not None and self._recognizer.is_running:
+            if self._shutting_down or self._engine_loading or (
+                self._recognizer is not None and self._recognizer.is_running
+            ):
                 return
-            try:
-                engine = self._ensure_engine()
-                recorder = AudioRecorder(
-                    sample_rate=self.config.sample_rate,
-                    device=self.config.input_device,
-                )
-                self._recognizer = StreamingRecognizer(
-                    recorder=recorder,
-                    engine=engine,
-                    on_partial=self._handle_partial,
-                    on_commit=self._handle_commit,
-                    on_error=self._handle_error,
-                    interval_ms=self.config.recognize_interval_ms,
-                )
-                self.typist.begin_session()
-                self._recognizer.start()
-            except Exception as exc:
-                logger.exception("音声入力を開始できませんでした")
-                self._set_state(AppState.ERROR)
-                self._on_error(str(exc))
-                self._recognizer = None
+            if self._engine is None:
+                self._engine_loading = True
+                self._set_state(AppState.RECOGNIZING)
+                threading.Thread(
+                    target=self._load_engine_and_start,
+                    name="engine-loader",
+                    daemon=True,
+                ).start()
                 return
-            self._set_state(AppState.RECORDING)
+            self._start_with_engine(self._engine)
+
+    def _load_engine_and_start(self) -> None:
+        """重いモデルロードを GUI スレッドの外で行う。"""
+        try:
+            engine = WhisperCppEngine(
+                model_path=self.config.resolved_model_path(),
+                language=self.config.language,
+                n_threads=self.config.n_threads,
+            )
+        except Exception as exc:
+            logger.exception("音声認識エンジンをロードできませんでした")
+            with self._lock:
+                self._engine_loading = False
+                if not self._shutting_down:
+                    self._set_state(AppState.ERROR)
+                    self._on_error(str(exc))
+            return
+
+        with self._lock:
+            self._engine_loading = False
+            if self._shutting_down:
+                return
+            self._engine = engine
+            self._start_with_engine(engine)
+
+    def _start_with_engine(self, engine: RecognitionEngine) -> None:
+        """ロック保持中に録音・認識ワーカーを開始する。"""
+        try:
+            recorder = AudioRecorder(
+                sample_rate=self.config.sample_rate,
+                device=self.config.input_device,
+            )
+            self._recognizer = StreamingRecognizer(
+                recorder=recorder,
+                engine=engine,
+                on_partial=self._handle_partial,
+                on_commit=self._handle_commit,
+                on_error=self._handle_error,
+                interval_ms=self.config.recognize_interval_ms,
+            )
+            self.typist.begin_session()
+            self._recognizer.start()
+        except Exception as exc:
+            logger.exception("音声入力を開始できませんでした")
+            self._set_state(AppState.ERROR)
+            self._on_error(str(exc))
+            self._recognizer = None
+            return
+        self._set_state(AppState.RECORDING)
 
     def stop_dictation(self) -> None:
         """音声入力を停止する。最終認識の完了までは「認識中」を表示する。"""
@@ -141,21 +182,30 @@ class AppController:
             ).start()
 
     def _finish(self, recognizer: StreamingRecognizer) -> None:
-        recognizer.stop()
+        if not recognizer.stop():
+            self._handle_error(TimeoutError("音声認識の停止がタイムアウトしました"))
+            return
         with self._lock:
             # 最終認識の完了を待つ間に新しい録音が始まっていたら何もしない
             if self._recognizer is not recognizer:
                 return
             self._recognizer = None
+            if self._pending_engine_reload:
+                self._engine = None
+                self._pending_engine_reload = False
             if self._state == AppState.RECOGNIZING:
                 self._set_state(AppState.WAITING)
 
     def shutdown(self) -> None:
         """アプリ終了時の後片付け。"""
-        recognizer = self._recognizer
+        with self._lock:
+            self._shutting_down = True
+            recognizer = self._recognizer
         if recognizer is not None:
-            recognizer.stop(timeout=5.0)
-            self._recognizer = None
+            if not recognizer.stop(timeout=5.0):
+                logger.warning("音声認識ワーカーは停止タイムアウト後も動作中です")
+            else:
+                self._recognizer = None
 
     # ---------------------------------------------------------- コールバック
 
@@ -182,7 +232,9 @@ class AppController:
         self.typist.enabled = self.config.auto_input
         self.typist.input_delay_ms = self.config.input_delay_ms
         self.typist.typing_interval_ms = self.config.typing_interval_ms
-        if reload_engine and (
-            self._recognizer is None or not self._recognizer.is_running
-        ):
-            self._engine = None
+        if reload_engine:
+            if self._recognizer is not None and self._recognizer.is_running:
+                self._pending_engine_reload = True
+            else:
+                self._engine = None
+                self._pending_engine_reload = False

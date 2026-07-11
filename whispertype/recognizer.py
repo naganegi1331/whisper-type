@@ -64,14 +64,21 @@ class StreamingRecognizer:
         self._thread = threading.Thread(target=self._run, name="recognizer", daemon=True)
         self._thread.start()
 
-    def stop(self, timeout: float = 30.0) -> None:
-        """録音を止め、最終認識が完了するまで待つ。"""
+    def stop(self, timeout: float = 30.0) -> bool:
+        """録音を止め、最終認識が完了するまで待つ。
+
+        ``False`` はタイムアウト後もワーカーが動作中であることを示す。
+        """
         if not self.is_running:
-            return
+            return True
         self._stop_event.set()
         assert self._thread is not None
-        self._thread.join(timeout=timeout)
+        thread = self._thread
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            return False
         self._thread = None
+        return True
 
     def _run(self) -> None:
         sr = self._recorder.sample_rate
