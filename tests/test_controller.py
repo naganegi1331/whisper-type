@@ -2,6 +2,8 @@
 
 import time
 
+import whispertype.controller as controller_module
+
 from whispertype.config import AppConfig
 from whispertype.controller import AppController
 from whispertype.state import AppState
@@ -89,3 +91,31 @@ def test_engine_reload_is_deferred_until_recording_finishes():
     controller.stop_dictation()
     assert wait_until(lambda: controller.state == AppState.WAITING)
     assert controller._engine is None
+
+
+def test_start_chime_plays_only_after_successful_start(monkeypatch):
+    played: list[bool] = []
+    monkeypatch.setattr(
+        controller_module, "play_start_chime", lambda: played.append(True)
+    )
+    controller, states, errors = make_controller()
+
+    controller.start_dictation()
+    assert played == [True]
+    controller.stop_dictation()
+    assert wait_until(lambda: controller.state == AppState.WAITING)
+
+
+def test_start_chime_can_be_disabled(monkeypatch):
+    played: list[bool] = []
+    monkeypatch.setattr(
+        controller_module, "play_start_chime", lambda: played.append(True)
+    )
+    controller = AppController(
+        config=AppConfig(start_chime=False, recognize_interval_ms=200),
+        engine=SilentEngine(),
+    )
+
+    controller.start_dictation()
+    assert played == []
+    controller.shutdown()

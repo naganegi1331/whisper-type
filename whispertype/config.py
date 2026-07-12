@@ -48,6 +48,7 @@ class AppConfig:
     auto_input: bool = True
     input_delay_ms: int = 0         # 自動入力開始までの待機時間
     typing_interval_ms: int = 0     # 1 文字あたりの入力間隔（入力速度）
+    start_chime: bool = True        # 音声入力開始時に通知音を鳴らす
 
     # 4.1 常駐
     autostart: bool = False         # Windows 起動時に自動常駐
@@ -102,7 +103,7 @@ def _is_valid_value(name: str, value: object) -> bool:
         return isinstance(value, str) and (bool(value.strip()) or name == "input_device")
     if name == "language":
         return value in {"auto", "ja", "en"}
-    if name in {"auto_input", "autostart", "start_minimized"}:
+    if name in {"auto_input", "start_chime", "autostart", "start_minimized"}:
         return type(value) is bool
     if type(value) is not int:
         return False

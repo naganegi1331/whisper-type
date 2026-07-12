@@ -12,6 +12,7 @@ from typing import Callable
 
 from .audio import AudioRecorder
 from .config import AppConfig
+from .cues import play_start_chime
 from .engine import RecognitionEngine, WhisperCppEngine
 from .recognizer import StreamingRecognizer
 from .state import AppState
@@ -168,6 +169,8 @@ class AppController:
             self._recognizer = None
             return
         self._set_state(AppState.RECORDING)
+        if self.config.start_chime:
+            play_start_chime()
 
     def stop_dictation(self) -> None:
         """音声入力を停止する。最終認識の完了までは「認識中」を表示する。"""

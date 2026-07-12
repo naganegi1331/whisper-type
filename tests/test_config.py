@@ -10,6 +10,7 @@ def test_defaults():
     assert cfg.hotkey == DEFAULT_HOTKEY == "ctrl+shift+space"
     assert cfg.model_name == "large-v3-turbo"
     assert cfg.auto_input is True
+    assert cfg.start_chime is True
     assert cfg.language == "auto"
     assert cfg.sample_rate == 16000
 
@@ -50,6 +51,7 @@ def test_load_rejects_invalid_types_and_ranges(tmp_path):
         json.dumps(
             {
                 "auto_input": "yes",
+                "start_chime": "yes",
                 "recognize_interval_ms": "fast",
                 "typing_interval_ms": -1,
                 "language": "unsupported",

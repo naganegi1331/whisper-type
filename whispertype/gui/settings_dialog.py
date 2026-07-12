@@ -66,6 +66,10 @@ class SettingsDialog(QDialog):
         self._interval_spin.setValue(cfg.typing_interval_ms)
         form.addRow("入力速度", self._interval_spin)
 
+        self._start_chime_check = QCheckBox("音声入力の開始時にチャイムを鳴らす")
+        self._start_chime_check.setChecked(cfg.start_chime)
+        form.addRow("開始音", self._start_chime_check)
+
         # 音声認識
         self._language_combo = QComboBox()
         for label, code in _LANGUAGES:
@@ -124,6 +128,7 @@ class SettingsDialog(QDialog):
         cfg.auto_input = self._auto_input_check.isChecked()
         cfg.input_delay_ms = self._delay_spin.value()
         cfg.typing_interval_ms = self._interval_spin.value()
+        cfg.start_chime = self._start_chime_check.isChecked()
         cfg.language = self._language_combo.currentData()
         cfg.model_path = self._model_path_edit.text()
 
